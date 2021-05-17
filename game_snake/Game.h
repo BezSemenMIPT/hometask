@@ -1,4 +1,5 @@
 #pragma once
+
 #include <utility>
 #include <list>
 
@@ -18,6 +19,13 @@
 #include <sys/poll.h>
 #include <termios.h>
 
+#define LEFT -1
+#define RIGHT 1
+#define UP -2
+#define DOWN 2
+
+#define SNAKE 42
+#define SNAKE_HEAD 43
 
 using namespace std;
 
@@ -25,48 +33,54 @@ class View;
 
 class Rabbit
 {
-public:
-	Rabbit(coord coordinates);
-	coord get_coordinates();
-	~Rabbit();
-private:
-	coord _coordinates;
+	public:
+		Rabbit(pair<int, int> coordinates);
+		pair<int, int> get_coordinates();
+		int figure;
+		int color;
+		~Rabbit();
+	private:
+		pair<int, int> _coordinates;
 };
 
 class Snake
 {
-public:
-	Snake(coord snake_head);
-	void set_direct(int direction);
-	list<coord> get_coordinates();
-	coord get_snake_head();
-	int get_direct();
-	void update(coord head);
-	~Snake();
-private:
-	list <coord> _coordinates;
-	int direct;
+	public:
+		Snake(pair<int, int> snake_head, int wight);
+		void set_direct(int derection);
+		list<pair <int, int>> get_coordinates();
+		pair<int, int> get_snake_head();
+		int get_direct();
+		void eat_rabbit();
+		void update(pair<int, int> head);
+		~Snake();
+	private:
+		list <pair<int, int>> _coordinates;
+		int direct;
 };
 
 class Game
 {
-public:
-	Game(View* view);
-	list<Snake> get_snake_list();
-	list<Rabbit> get_rabbit_list();
-	list <coord> get_snake_coordinates(Snake& snake);
-	coord get_rabbit_coordinates(Rabbit& rabbit);
-	Snake* get_snake();
-	Rabbit& make_rabbit();
-	Snake& make_snake();
-	void update_snake();
-	~Game();
-private:
-	View* view;
-	list <Rabbit> rabbits;
-	list<Snake> snakes;
-	//list<pair<int, int>> obstacles;
-	coord make_coordinates();
-	//void make_obsracles();
-//	int is_cell_obsracles(pair<int, int> cell);
+	public:
+		Game(View* view);
+		list<Snake>& get_snake_list();
+		list<Rabbit>& get_rabbit_list();
+		list <pair <int, int>> get_snake_coordinates(Snake& snake);
+		list<pair<int, int>> get_wall();
+		int get_obstacles(pair<int, int> shell);
+		pair <int, int> get_rabbit_coordinates(Rabbit& rabbit);
+		Snake* get_snake();
+		Rabbit& make_rabbit();
+		Snake& make_snake();
+		void update_snake();
+		void remove_rabbit(list<Rabbit>::iterator target);
+		~Game();
+	private:
+		void check_shell_is_rabbit(Snake& snake);
+		View* view;
+		list <Rabbit> rabbits;
+		list <Snake> snakes;
+		list<pair<int, int>> obstacles;
+		pair<int, int> make_coordinates();
 };
+

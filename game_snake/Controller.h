@@ -1,4 +1,5 @@
 #pragma once
+
 #include "Game.h"
 #include "View.h"
 #include <iostream>
@@ -16,5 +17,6 @@ class Controller
 {
 public:
 	Controller();
+	static Controller* get(Game* game, View* view, const char* control = "Human");
 	~Controller();
 };

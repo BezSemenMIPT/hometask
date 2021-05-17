@@ -4,7 +4,7 @@
 #include <string.h>
 
 
-View* View::get(const char* tui_or_gui)
+View* View :: get(const char* tui_or_gui)
 {
 	if (strcmp(tui_or_gui, "Tui") == 0)
 	{
@@ -16,9 +16,8 @@ View* View::get(const char* tui_or_gui)
 	}
 }
 
-View::View()
+View :: View()
 {
-  setbuf(stdout,NULL);
 };
 
 View :: ~View()

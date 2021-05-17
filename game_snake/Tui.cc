@@ -1,4 +1,5 @@
 #include "Tui.h"
+#include <time.h>
 
 using namespace std;
 
@@ -6,8 +7,11 @@ function<void(void)> Tui::onwinch;
 
 void Tui::addtimer(timer_fn fun, int interval)
 {
-	timer.first = fun;
-	timer.second = interval;
+	timer t;
+	t.fn = fun;
+	t.interval = interval;
+	t.life_time = 0;
+	timers.push_back(t);
 }
 
 void Tui::setonkey(key_fn fun)
@@ -15,24 +19,42 @@ void Tui::setonkey(key_fn fun)
 	keys.push_back(fun);
 }
 
+bool minfn(const timer& a, const timer& b)
+{
+	return ((a.interval - a.life_time) < (b.interval - b.life_time));
+}
+
+int delta_time(struct timespec first, struct timespec second)
+{
+	return -first.tv_sec * 1000 + second.tv_sec * 1000 - first.tv_nsec / 1000000 + second.tv_nsec / 1000000;
+}
 
 void Tui::runloop()
 {
 	struct pollfd fds = { 0, POLL_IN, 0 };
-	int interval = timer.second;
 	running = true;
-	int flag = 1;
 	while (running)
 	{
-		int poll_return = poll(&fds, 1, flag * interval);
-		flag = 1;
-		if (poll_return == 0)
+		struct timespec t1, t2;
+		clock_gettime(CLOCK_MONOTONIC, &t1);
+		int interval = min_element(timers.begin(), timers.end(), minfn)->interval;
+
+		int poll_return = poll(&fds, 1, interval);
+		clock_gettime(CLOCK_MONOTONIC, &t2);
+
+		int delta = delta_time(t1, t2);
+
+		for_each(timers.begin(), timers.end(), [delta](timer& t) {t.life_time += delta; });
+		for_each(timers.begin(), timers.end(), [](timer& t) {
+			if (t.life_time >= t.interval)
+			{
+				t.life_time = 0;
+				t.fn();
+			}
+		});
+
+		if (poll_return != 0)
 		{
-			timer.first();
-		}
-		else
-		{
-			flag = 0;
 			char buf;
 			read(0, &buf, 1);
 			if (buf == 'q')
@@ -54,8 +76,7 @@ void Tui::quit()
 
 void clean_screen()
 {
-  	printf("\e[H");
-	printf("\e[J");
+	printf("\e[2J"); //clean sreen
 };
 
 void Tui::winch(int n)
@@ -63,84 +84,36 @@ void Tui::winch(int n)
 	onwinch();
 };
 
-coord Tui::get_screen_size() const
+pair<int, int> Tui::get_screen_size() const
 {
 	struct winsize screen_size;
 	ioctl(STDOUT_FILENO, TIOCGWINSZ, &screen_size);
-	coord tmp;
-	tmp.x=screen_size.ws_row;
-	tmp.y= screen_size.ws_col;
-	return tmp;
+	return make_pair(screen_size.ws_row, screen_size.ws_col);
 }
 
-void Tui::draw_hor_line(struct winsize ws) 
+void Tui::draw_frame()
 {
-	for (int i = 0; i < ws.ws_col; i++) {
-		printf("%c", '#');
-	}
-}
-
-void Tui::draw_ver_lines(struct winsize ws) 
-{
-	for (int i = 0; i < ws.ws_row-4; i++) 
-	{	
-		printf("\e[E");
-		printf("%c", '#');
-		for (int i = 0; i < ws.ws_col-2; i++) 
-		{
-		  printf("%c", ' ');
-		}
-		printf("%c", '#');
-	}
-	printf("\e[E");
+	//
 }
 
 
-void Tui::draw_frame() 
+void Tui::draw_cell(pair<int, int> coordinates, int collor)
 {
-	struct winsize ws;
-	clean_screen();
-	ioctl(0, TIOCGWINSZ, &ws);
-	draw_hor_line(ws);
-	draw_ver_lines(ws);
-	draw_hor_line(ws);
-}
-
-void tui::draw_rabbit(coord p)
-{
-  printf("\e[%d;%d H", p.x,p.y);
-  printf("&");
-}
-
-void tui::draw_snake_body(coord p)
-{
-  printf("\e[%d;%d H", p.x,p.y);
-  printf("o");
-}
-
-void tui::draw_snake_head(coord p,int direction)
-{
-  printf("\e[%d;%d H", p.x,p.y);
-  switch(direction) 
-  {
-    case UP:
-	    printf("^");
-	    break;
-    case DOWN:
-	    printf("v");
-    case LEFT:
-	    printf(">");
-    case RIGHT:
-	    printf("<");
-    default:
-	    break;
-  }	    
-}
-
-void Tui::clean_cell(coord coordinates) const
-{
-	printf("\e[%d;%dH", coordinates.x, coordinates.y);
+	printf("\e[%d;%dH", coordinates.second, coordinates.first - 1);
+	printf("\e[%dm", collor); //set cell background
 	printf(" ");
+	printf("\e[0m"); //set normal background
+
+	printf("\e[%d;%dH", get_screen_size().first - 1, 0);
+};
+
+void Tui::clean_cell(pair<int, int> coordinates)
+{
+	printf("\e[%d;%dH", coordinates.second, coordinates.first - 1);
+	printf("\e[0m"); //set normal background
+	printf(" ");
+
+	printf("\e[%d;%dH", get_screen_size().first - 1, 0);
 }
 
 Tui::Tui()
@@ -152,7 +125,7 @@ Tui::Tui()
 	newt.c_lflag &= ~ECHO;
 	tcsetattr(STDIN_FILENO, TCSANOW, &newt);
 
-	draw_frame();
+	clean_screen();
 	onwinch = bind(&Tui::draw_frame, this);
 	signal(SIGWINCH, &Tui::winch);
 };
@@ -161,55 +134,3 @@ Tui :: ~Tui()
 {
 	tcsetattr(STDIN_FILENO, TCSANOW, &_termios);
 };
-
-
-
-#if 0
-void Tui::draw_frame()
-{
-	clean_screen();
-	printf("\e[47m"); //set white background
-
-	//draw frame
-	printf("\e[0;0H"); //set cursor to the top left
-	for (int i = 0; i < get_screen_size().second; i++)
-	{
-		printf(" ");
-	}
-	for (int i = 0; i < get_screen_size().first - 4; i++)
-	{
-		printf("\n");
-		printf(" ");
-		for (int j = 0; j < get_screen_size().second - 1; j++)
-		{
-			printf("\e[C"); //cursor shift
-		}
-		printf(" ");
-	}
-	printf("\n");
-	for (int i = 0; i < get_screen_size().second; i++)
-	{
-		printf(" ");
-	}
-	printf("\n");
-
-
-	printf("\e[0m"); //set normal background
-}
-#endif
-
-
-
-#if 0
-void Tui::draw_cell(coord coordinates, int collor) const
-{
-	printf("\e[%d;%dH", coordinates.y, coordinates.x - 1);
-	printf("\e[%dm", collor); //set cell background
-	printf(" ");
-	printf("\e[0m"); //set normal background
-
-	printf("\e[%d;%dH", get_screen_size().first - 1, 0);
-};
-#endif
-
-
